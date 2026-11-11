@@ -41,7 +41,7 @@ function hasFfmpeg() {
 
 function getExtraYtdlpArgs() {
   const extra = [
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=ios,web_creator,tv_embedded,android',
     '--extractor-args', 'twitter:api=syndication',
     '--extractor-args', 'tiktok:app_version=20.2.1',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -50,8 +50,8 @@ function getExtraYtdlpArgs() {
     '--add-header', 'Sec-Fetch-Mode:navigate',
     '--geo-bypass',
     '--no-check-certificates',
-    '--socket-timeout', '15',
-    '--extractor-retries', '2'
+    '--socket-timeout', '20',
+    '--extractor-retries', '3'
   ];
 
   const localCookies = path.join(path.resolve(), 'cookies.txt');
