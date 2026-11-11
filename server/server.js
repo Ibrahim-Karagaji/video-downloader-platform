@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { spawn, execSync } from 'child_process';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,9 +79,9 @@ function detectPlatform(url, extractor) {
   if (lowerUrl.includes('snapchat.com') || lowerExt.includes('snapchat')) return 'snapchat';
   if (lowerUrl.includes('tiktok.com') || lowerExt.includes('tiktok')) return 'tiktok';
   if (lowerUrl.includes('instagram.com') || lowerExt.includes('instagram')) return 'instagram';
-  if (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.watch') || lowerExt.includes('facebook')) return 'facebook';
-  if (lowerUrl.includes('reddit.com') || lowerExt.includes('reddit')) return 'reddit';
-  if (lowerUrl.includes('pinterest.com') || lowerExt.includes('pinterest')) return 'pinterest';
+  if (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.watch') || lowerUrl.includes('fb.com') || lowerExt.includes('facebook')) return 'facebook';
+  if (lowerUrl.includes('reddit.com') || lowerUrl.includes('redd.it') || lowerExt.includes('reddit')) return 'reddit';
+  if (lowerUrl.includes('pinterest.com') || lowerUrl.includes('pin.it') || lowerExt.includes('pinterest')) return 'pinterest';
   if (lowerUrl.includes('vimeo.com') || lowerExt.includes('vimeo')) return 'vimeo';
   return 'generic';
 }
@@ -139,13 +141,11 @@ app.post('/api/info', async (req, res) => {
       const platform = detectPlatform(cleanUrl, data.extractor);
 
       const options = [
-        { id: 'best', label: 'Best Quality (MP4 Video)', ext: 'mp4', type: 'video', quality: 'Best Available' },
+        { id: 'best', label: 'أعلى جودة متاحة (MP4)', ext: 'mp4', type: 'video', quality: 'Best Available' },
         { id: '1080', label: 'Full HD 1080p (MP4)', ext: 'mp4', type: 'video', quality: '1080p' },
         { id: '720', label: 'HD 720p (MP4)', ext: 'mp4', type: 'video', quality: '720p' },
         { id: '480', label: 'SD 480p (MP4)', ext: 'mp4', type: 'video', quality: '480p' },
-        { id: '360', label: 'Low 360p (MP4)', ext: 'mp4', type: 'video', quality: '360p' },
-        { id: 'mp3', label: 'Audio Only (MP3)', ext: 'mp3', type: 'audio', quality: 'Best Audio' },
-        { id: 'm4a', label: 'Audio Only (M4A)', ext: 'm4a', type: 'audio', quality: 'Original Audio' }
+        { id: 'mp3', label: 'صوت فقط (Audio)', ext: 'mp3', type: 'audio', quality: 'Audio Only' }
       ];
 
       res.json({
@@ -179,76 +179,53 @@ app.get('/api/download', (req, res) => {
 
   const safeTitle = sanitizeFilename(title);
   const ffmpegInstalled = hasFfmpeg();
-  let ext = 'mp4';
-  let formatArg = 'best[ext=mp4]/best';
 
+  const tempDir = os.tmpdir();
+  const fileId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const outTemplate = path.join(tempDir, `vdl_${fileId}.%(ext)s`);
+
+  let formatArg;
   if (ffmpegInstalled) {
     if (quality === '1080') {
-      formatArg = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best';
-      ext = 'mp4';
+      formatArg = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best';
     } else if (quality === '720') {
-      formatArg = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best';
-      ext = 'mp4';
+      formatArg = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best';
     } else if (quality === '480') {
-      formatArg = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best';
-      ext = 'mp4';
-    } else if (quality === '360') {
-      formatArg = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]/best';
-      ext = 'mp4';
+      formatArg = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best';
     } else if (quality === 'mp3') {
       formatArg = 'bestaudio/best';
-      ext = 'mp3';
-    } else if (quality === 'm4a') {
-      formatArg = 'bestaudio[ext=m4a]/bestaudio/best';
-      ext = 'm4a';
     } else {
-      formatArg = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
-      ext = 'mp4';
+      formatArg = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best';
     }
   } else {
-    if (quality === '720' || quality === '1080') {
-      formatArg = 'best[height<=1080][ext=mp4]/best[ext=mp4]/best';
-      ext = 'mp4';
+    if (quality === '1080' || quality === '720') {
+      formatArg = 'best[height<=1080][vcodec!=none][acodec!=none]/best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best';
     } else if (quality === '480') {
-      formatArg = 'best[height<=480][ext=mp4]/best[ext=mp4]/best';
-      ext = 'mp4';
+      formatArg = 'best[height<=480][vcodec!=none][acodec!=none]/best[height<=480]/best';
     } else if (quality === '360') {
-      formatArg = 'best[height<=360][ext=mp4]/best[ext=mp4]/best';
-      ext = 'mp4';
+      formatArg = 'best[height<=360][vcodec!=none][acodec!=none]/best[height<=360]/best';
     } else if (quality === 'mp3' || quality === 'm4a') {
       formatArg = 'bestaudio[ext=m4a]/bestaudio/best';
-      ext = quality === 'mp3' ? 'mp3' : 'm4a';
     } else {
-      formatArg = 'best[ext=mp4]/best';
-      ext = 'mp4';
+      formatArg = 'best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best';
     }
   }
 
-  const filename = `${safeTitle}.${ext}`;
-  const asciiFallback = safeTitle.replace(/[^\x20-\x7E]/g, '').trim() || 'video';
-
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${asciiFallback}.${ext}"; filename*=UTF-8''${encodeURIComponent(filename)}`
-  );
-  res.setHeader(
-    'Content-Type',
-    quality.includes('mp3') ? 'audio/mpeg' : quality.includes('m4a') ? 'audio/mp4' : 'video/mp4'
-  );
-
+  const cleanUrl = url.trim();
   const args = [
     ...ytdlp.argsPrefix,
-    '-o', '-',
     '--no-playlist',
+    '--no-warnings',
     '-f', formatArg,
-    url
+    '-o', outTemplate,
+    cleanUrl
   ];
 
   const child = spawn(ytdlp.cmd, args);
-
-  child.stdout.pipe(res);
+  let stderrData = '';
 
   child.stderr.on('data', (data) => {
+    stderrData += data.toString();
     console.log(`[yt-dlp download]: ${data.toString().trim()}`);
   });
 
@@ -260,13 +237,58 @@ app.get('/api/download', (req, res) => {
   });
 
   req.on('close', () => {
-    if (!child.killed) {
-      child.kill('SIGINT');
+    if (!child.killed && child.exitCode === null) {
+      try { child.kill('SIGINT'); } catch {}
+    }
+  });
+
+  child.on('close', (code) => {
+    if (code !== 0) {
+      console.error('yt-dlp exit with code:', code, stderrData);
+      if (!res.headersSent) {
+        return res.status(500).send(stderrData.split('\n')[0] || 'Download failed');
+      }
+      return;
+    }
+
+    try {
+      const allFiles = fs.readdirSync(tempDir);
+      const targetFile = allFiles.find(f => f.startsWith(`vdl_${fileId}.`));
+
+      if (!targetFile) {
+        if (!res.headersSent) {
+          return res.status(500).send('Downloaded file not found on server');
+        }
+        return;
+      }
+
+      const fullPath = path.join(tempDir, targetFile);
+      const ext = path.extname(fullPath).replace('.', '') || 'mp4';
+      const finalName = `${safeTitle}.${ext}`;
+
+      res.download(fullPath, finalName, (err) => {
+        try {
+          fs.unlinkSync(fullPath);
+        } catch {}
+      });
+    } catch (fsErr) {
+      console.error('Error finding or sending file:', fsErr);
+      if (!res.headersSent) {
+        res.status(500).send('Error delivering file');
+      }
     }
   });
 });
 
+const distPath = path.join(path.resolve(), 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => {
   console.log(`✅ Downloader API Server running on http://localhost:${PORT}`);
 });
-

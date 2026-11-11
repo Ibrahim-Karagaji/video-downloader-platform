@@ -7,6 +7,5 @@ echo ==============================================
 echo.
 echo جاري فتح المتصفح وتشغيل الخادم...
 start http://localhost:3000
-npm run dev
+node dev.js
 pause
-

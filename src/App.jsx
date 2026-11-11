@@ -70,11 +70,12 @@ export default function App() {
     setVideoData(null);
 
     try {
-      const res = await fetch('/api/info', {
+      const apiBase = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : '';
+      const res = await fetch(`${apiBase}/api/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: cleanUrl }),
-        signal: AbortSignal.timeout(4000)
+        signal: AbortSignal.timeout(30000)
       });
 
       if (res.ok) {
@@ -82,17 +83,18 @@ export default function App() {
         setVideoData(data);
         setLoading(false);
         return;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'تعذر جلب تفاصيل هذا الفيديو.');
       }
-    } catch {
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setError('استغرق فحص الرابط وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(err.message || 'تعذر الاتصال بالخادم.');
+      }
+      setLoading(false);
     }
-
-    setVideoData({
-      title: 'فيديو جاهز للتحميل',
-      thumbnail: null,
-      duration: null,
-      url: cleanUrl
-    });
-    setLoading(false);
   };
 
   return (

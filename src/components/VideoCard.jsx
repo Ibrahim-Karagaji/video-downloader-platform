@@ -25,6 +25,7 @@ export default function VideoCard({ video, isDark = true }) {
       await downloadVideo({
         url: video.url,
         quality: selectedFormat,
+        title: video.title || 'video',
         isAudio
       });
     } catch (err) {
@@ -46,14 +47,21 @@ export default function VideoCard({ video, isDark = true }) {
       }`}
     >
       <div className="flex gap-3 items-center">
-        {video.thumbnail && (
+        {video.thumbnail ? (
           <img
             src={video.thumbnail}
             alt=""
+            referrerPolicy="no-referrer"
             className={`w-20 sm:w-28 aspect-video rounded-lg object-cover flex-shrink-0 border ${
               isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
             }`}
           />
+        ) : (
+          <div className={`w-20 sm:w-28 aspect-video rounded-lg flex items-center justify-center flex-shrink-0 border ${
+            isDark ? 'bg-slate-950 border-slate-800 text-slate-600' : 'bg-slate-100 border-slate-200 text-slate-400'
+          }`}>
+            <Film className="w-6 h-6" />
+          </div>
         )}
         <div className="min-w-0 flex-1">
           <h3 className={`font-bold text-xs sm:text-sm line-clamp-2 leading-snug ${
