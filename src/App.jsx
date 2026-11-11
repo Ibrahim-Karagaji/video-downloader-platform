@@ -75,7 +75,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: cleanUrl }),
-        signal: AbortSignal.timeout(30000)
+        signal: AbortSignal.timeout(60000)
       });
 
       if (res.ok) {
@@ -88,7 +88,7 @@ export default function App() {
         throw new Error(errData.error || 'تعذر جلب تفاصيل هذا الفيديو.');
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
+      if (err.name === 'AbortError' || err.message?.includes('timed out') || err.message?.includes('timeout')) {
         setError('استغرق فحص الرابط وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.');
       } else {
         setError(err.message || 'تعذر الاتصال بالخادم.');

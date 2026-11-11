@@ -41,7 +41,7 @@ function hasFfmpeg() {
 
 function getExtraYtdlpArgs() {
   const extra = [
-    '--extractor-args', 'youtube:player_client=tv_embedded,ios,android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--extractor-args', 'twitter:api=syndication',
     '--extractor-args', 'tiktok:app_version=20.2.1',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -50,7 +50,8 @@ function getExtraYtdlpArgs() {
     '--add-header', 'Sec-Fetch-Mode:navigate',
     '--geo-bypass',
     '--no-check-certificates',
-    '--socket-timeout', '30'
+    '--socket-timeout', '15',
+    '--extractor-retries', '2'
   ];
 
   const localCookies = path.join(path.resolve(), 'cookies.txt');
@@ -148,6 +149,34 @@ app.post('/api/info', async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
     return res.status(400).json({ error: 'Please provide a valid video URL starting with http:// or https://' });
+  }
+
+  const cleanUrl = normalizeVideoUrl(url);
+
+  const ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+  if (ytMatch && ytMatch[1]) {
+    try {
+      const vidId = ytMatch[1];
+      const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vidId}&format=json`, { signal: AbortSignal.timeout(4000) });
+      if (oembedRes.ok) {
+        const oembed = await oembedRes.json();
+        return res.json({
+          id: vidId,
+          title: oembed.title || 'YouTube Video',
+          thumbnail: `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+          duration: null,
+          uploader: oembed.author_name || 'YouTube',
+          platform: 'youtube',
+          url: cleanUrl,
+          formats: [
+            { id: 'best', label: 'أعلى جودة متاحة (MP4)', ext: 'mp4', type: 'video', quality: 'Best Available' },
+            { id: '720', label: 'HD 720p (MP4)', ext: 'mp4', type: 'video', quality: '720p' },
+            { id: '480', label: 'SD 480p (MP4)', ext: 'mp4', type: 'video', quality: '480p' },
+            { id: 'mp3', label: 'صوت فقط (Audio)', ext: 'mp3', type: 'audio', quality: 'Audio Only' }
+          ]
+        });
+      }
+    } catch {}
   }
 
   const ytdlp = getWorkingYtdlpCmd();
