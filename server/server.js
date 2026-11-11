@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Detect whether yt-dlp is available via direct binary or python -m yt_dlp
 function getWorkingYtdlpCmd() {
   try {
     execSync('yt-dlp --version', { stdio: 'ignore' });
@@ -29,7 +28,6 @@ function getWorkingYtdlpCmd() {
   }
 }
 
-// Detect whether ffmpeg is available
 function hasFfmpeg() {
   try {
     execSync('ffmpeg -version', { stdio: 'ignore' });
@@ -39,7 +37,6 @@ function hasFfmpeg() {
   }
 }
 
-// Health check endpoint
 app.get('/api/health', (req, res) => {
   const ytdlp = getWorkingYtdlpCmd();
   const ffmpeg = hasFfmpeg();
@@ -51,7 +48,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Clean filename for Content-Disposition header
 function sanitizeFilename(name) {
   return (name || 'video')
     .replace(/[/\\?%*:|"<>]/g, '_')
@@ -60,7 +56,6 @@ function sanitizeFilename(name) {
     .slice(0, 100);
 }
 
-// Format duration helper (seconds to HH:MM:SS or MM:SS)
 function formatDuration(sec) {
   if (!sec || isNaN(sec)) return null;
   const s = Math.floor(sec);
@@ -73,7 +68,6 @@ function formatDuration(sec) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Detect platform from URL or extractor
 function detectPlatform(url, extractor) {
   const lowerUrl = (url || '').toLowerCase();
   const lowerExt = (extractor || '').toLowerCase();
@@ -90,7 +84,6 @@ function detectPlatform(url, extractor) {
   return 'generic';
 }
 
-// 1. Get video metadata and formats
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
@@ -145,7 +138,6 @@ app.post('/api/info', async (req, res) => {
       const uploader = data.uploader || data.channel || data.creator || 'Unknown';
       const platform = detectPlatform(cleanUrl, data.extractor);
 
-      // Predefined quality & format options
       const options = [
         { id: 'best', label: 'Best Quality (MP4 Video)', ext: 'mp4', type: 'video', quality: 'Best Available' },
         { id: '1080', label: 'Full HD 1080p (MP4)', ext: 'mp4', type: 'video', quality: '1080p' },
@@ -173,7 +165,6 @@ app.post('/api/info', async (req, res) => {
   });
 });
 
-// 2. Direct streaming download endpoint
 app.get('/api/download', (req, res) => {
   const { url, quality = 'best', title = 'video' } = req.query;
 
@@ -215,7 +206,6 @@ app.get('/api/download', (req, res) => {
       ext = 'mp4';
     }
   } else {
-    // Progressive formats that have both video + audio bundled into one stream without requiring ffmpeg muxing
     if (quality === '720' || quality === '1080') {
       formatArg = 'best[height<=1080][ext=mp4]/best[ext=mp4]/best';
       ext = 'mp4';
@@ -259,7 +249,6 @@ app.get('/api/download', (req, res) => {
   child.stdout.pipe(res);
 
   child.stderr.on('data', (data) => {
-    // yt-dlp outputs progress to stderr
     console.log(`[yt-dlp download]: ${data.toString().trim()}`);
   });
 

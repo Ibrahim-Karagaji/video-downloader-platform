@@ -8,7 +8,6 @@ export default function App() {
   const [error, setError] = useState(null);
   const [videoData, setVideoData] = useState(null);
 
-  // إعداد الوضع الليلي / الفاتح مع الحفظ
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem('theme') || 'dark';
@@ -39,7 +38,6 @@ export default function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // لصق الرابط من الحافظة
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -48,18 +46,15 @@ export default function App() {
         setError(null);
       }
     } catch {
-      // الحافظة غير مسموحة
     }
   };
 
-  // مسح الإدخال
   const handleClear = () => {
     setUrl('');
     setError(null);
     setVideoData(null);
   };
 
-  // جلب معلومات الفيديو
   const handleFetch = async (e) => {
     if (e) e.preventDefault();
     const cleanUrl = url.trim();
@@ -74,7 +69,6 @@ export default function App() {
     setError(null);
     setVideoData(null);
 
-    // 1. محاولة استخدام السيرفر المحلي أولاً
     try {
       const res = await fetch('/api/info', {
         method: 'POST',
@@ -90,10 +84,8 @@ export default function App() {
         return;
       }
     } catch {
-      // السيرفر المحلي غير متصل (المشروع يعمل كـ React خالص على Vercel أو Netlify)
     }
 
-    // 2. إذا لم يكن السيرفر متصلاً، يفتح خيارات التحميل فوراً عبر السحابة
     setVideoData({
       title: 'فيديو جاهز للتحميل',
       thumbnail: null,
@@ -110,7 +102,6 @@ export default function App() {
         isDark ? 'bg-[#0b0f19] text-white' : 'bg-[#f8fafc] text-slate-900'
       }`}
     >
-      {/* شريط علوي صغير */}
       <header className="w-full max-w-lg mx-auto flex justify-between items-center py-1 flex-shrink-0">
         <span className={`text-xs font-bold ${
           isDark ? 'text-slate-400' : 'text-slate-500'
@@ -118,7 +109,6 @@ export default function App() {
           منزّل الفيديوهات
         </span>
 
-        {/* أيقونة تبديل الوضع (Icon Only) */}
         <button
           onClick={toggleTheme}
           type="button"
@@ -138,10 +128,8 @@ export default function App() {
         </button>
       </header>
 
-      {/* المحتوى الرئيسي في المنتصف بدون أي تمرير */}
       <main className="w-full max-w-lg mx-auto my-auto flex-1 flex flex-col justify-center items-center text-center space-y-2 sm:space-y-3 min-h-0">
         
-        {/* العنوان */}
         <div className="space-y-0.5">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             تحميل أي فيديو
@@ -153,7 +141,6 @@ export default function App() {
           </p>
         </div>
 
-        {/* حقل الرابط مدمج وصغير */}
         <form onSubmit={handleFetch} className="w-full">
           <div className={`flex items-center border rounded-2xl p-1 shadow-md gap-1 transition-all ${
             isDark
@@ -224,7 +211,6 @@ export default function App() {
           </div>
         </form>
 
-        {/* تنبيه الخطأ */}
         {error && (
           <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -232,7 +218,6 @@ export default function App() {
           </div>
         )}
 
-        {/* بطاقة الفيديو عند توفره */}
         {videoData && (
           <div className="w-full animate-fadeIn">
             <VideoCard video={videoData} isDark={isDark} />
@@ -241,7 +226,6 @@ export default function App() {
 
       </main>
 
-      {/* تذييل بسيط جداً وصغير */}
       <footer className={`w-full text-center py-1 text-[10px] flex-shrink-0 ${
         isDark ? 'text-slate-600' : 'text-slate-400'
       }`}>

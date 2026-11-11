@@ -45,7 +45,6 @@ export default function VideoCard({ video, isDark = true }) {
           : 'bg-white border-slate-200 text-slate-900 shadow-slate-200'
       }`}
     >
-      {/* معاينة مصغرة للفيديو */}
       <div className="flex gap-3 items-center">
         {video.thumbnail && (
           <img
@@ -72,7 +71,6 @@ export default function VideoCard({ video, isDark = true }) {
         </div>
       </div>
 
-      {/* اختيار الصيغة */}
       <div className="mt-3">
         <label className={`block text-[11px] sm:text-xs font-semibold mb-1.5 ${
           isDark ? 'text-slate-300' : 'text-slate-700'
@@ -118,7 +116,6 @@ export default function VideoCard({ video, isDark = true }) {
         </div>
       </div>
 
-      {/* تنبيه خطأ التحميل إن وجد */}
       {downloadError && (
         <div className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] sm:text-xs flex items-center gap-1.5">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -126,7 +123,6 @@ export default function VideoCard({ video, isDark = true }) {
         </div>
       )}
 
-      {/* زر التحميل */}
       <button
         onClick={handleDownload}
         disabled={downloading}

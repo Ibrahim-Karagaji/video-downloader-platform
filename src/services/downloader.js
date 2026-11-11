@@ -1,31 +1,22 @@
-// محرك التنزيل الذكي: يدعم الخادم المحلي المدمج، مع التحويل التلقائي لمحرك Cobalt السحابي عند الرفع (Deploy) على Vercel أو Netlify
-
 const PUBLIC_APIS = [
   'https://cobalt-api.kwiatekm.pl',
   'https://api.cobalt.tools',
   'https://capi.wuk.sh'
 ];
 
-/**
- * جلب تفاصيل أو رابط تنزيل الفيديو
- */
 export async function downloadVideo({ url, quality = 'best', isAudio = false }) {
   const cleanUrl = url.trim();
 
-  // 1. محاولة استخدام الخادم المحلي أولاً إذا كان متاحاً
   try {
     const healthCheck = await fetch('/api/health', { signal: AbortSignal.timeout(1200) });
     if (healthCheck.ok) {
-      // الخادم المحلي يعمل - نوجه للتحميل المباشر
       const downloadEndpoint = `/api/download?url=${encodeURIComponent(cleanUrl)}&quality=${encodeURIComponent(quality)}`;
       triggerBrowserDownload(downloadEndpoint);
       return { success: true, mode: 'local' };
     }
   } catch {
-    // الخادم المحلي غير متاح (المشروع مرفوع كـ React فقط على Vercel/Netlify)
   }
 
-  // 2. استخدام محرك Cobalt السحابي المباشر بدون الحاجة لأي سيرفر
   let qualityArg = '720';
   if (quality === '1080') qualityArg = '1080';
   else if (quality === '480') qualityArg = '480';
@@ -73,9 +64,6 @@ export async function downloadVideo({ url, quality = 'best', isAudio = false }) 
   throw lastError || new Error('تعذر معالجة الرابط، يرجى التأكد من أن الفيديو متاح للعامة.');
 }
 
-/**
- * دالة مساعدة لبدء التحميل في المتصفح
- */
 function triggerBrowserDownload(url) {
   const link = document.createElement('a');
   link.href = url;
@@ -85,4 +73,3 @@ function triggerBrowserDownload(url) {
   link.click();
   document.body.removeChild(link);
 }
-
