@@ -321,6 +321,97 @@ app.post('/api/info', async (req, res) => {
 
 const activeJobs = new Map();
 
+async function tryProxyFallback(vidId, cleanUrl, safeTitle, quality, outTemplate, job) {
+  const cobaltApis = [
+    'https://cobalt.api.scip.io',
+    'https://co.wuk.sh',
+    'https://api.cobalt.tools'
+  ];
+
+  for (const api of cobaltApis) {
+    try {
+      const res = await fetch(`${api}/`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: cleanUrl, videoQuality: quality === '1080' ? '1080' : '720' }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const streamUrl = data.url || (data.picker && data.picker[0]?.url);
+      if (streamUrl) {
+        const filePath = outTemplate.replace('%(ext)s', 'mp4');
+        const fileStream = fs.createWriteStream(filePath);
+        const downloadRes = await fetch(streamUrl, { signal: AbortSignal.timeout(60000) });
+        if (downloadRes.ok && downloadRes.body) {
+          const reader = downloadRes.body.getReader();
+          let received = 0;
+          const total = parseInt(downloadRes.headers.get('content-length') || '0', 10);
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            fileStream.write(value);
+            received += value.length;
+            if (total > 0) {
+              job.percent = Math.min(Math.round((received / total) * 100), 99);
+            }
+          }
+          fileStream.end();
+          job.filePath = filePath;
+          job.filename = `${safeTitle}.mp4`;
+          job.percent = 100;
+          job.status = 'ready';
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  const invidiousInstances = [
+    'https://invidious.nerdvpn.de',
+    'https://inv.nadeko.net',
+    'https://invidious.flokinet.to'
+  ];
+
+  for (const instance of invidiousInstances) {
+    try {
+      const res = await fetch(`${instance}/api/v1/videos/${vidId}`, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.formatStreams && data.formatStreams.length > 0) {
+        const stream = data.formatStreams.find(s => s.resolution === '720p') || data.formatStreams[0];
+        if (stream && stream.url) {
+          const filePath = outTemplate.replace('%(ext)s', 'mp4');
+          const fileStream = fs.createWriteStream(filePath);
+          const dlRes = await fetch(stream.url, { signal: AbortSignal.timeout(60000) });
+          if (dlRes.ok && dlRes.body) {
+            const reader = dlRes.body.getReader();
+            let received = 0;
+            const total = parseInt(dlRes.headers.get('content-length') || '0', 10);
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              fileStream.write(value);
+              received += value.length;
+              if (total > 0) {
+                job.percent = Math.min(Math.round((received / total) * 100), 99);
+              }
+            }
+            fileStream.end();
+            job.filePath = filePath;
+            job.filename = `${safeTitle}.mp4`;
+            job.percent = 100;
+            job.status = 'ready';
+            return true;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
 app.post('/api/download/start', (req, res) => {
   const { url, quality = 'best', title = 'video' } = req.body;
 
@@ -413,8 +504,16 @@ app.post('/api/download/start', (req, res) => {
     parseProgress(d);
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     if (code !== 0) {
+      if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+        const ytId = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/)?.[1];
+        if (ytId) {
+          const success = await tryProxyFallback(ytId, cleanUrl, safeTitle, quality, outTemplate, job);
+          if (success) return;
+        }
+      }
+
       job.status = 'error';
       job.error = formatArabicError(stderrData);
       return;
