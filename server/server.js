@@ -39,6 +39,25 @@ function hasFfmpeg() {
   }
 }
 
+function getExtraYtdlpArgs() {
+  const extra = [
+    '--extractor-args', 'youtube:player_client=ios,android,mweb'
+  ];
+
+  const localCookies = path.join(path.resolve(), 'cookies.txt');
+  if (fs.existsSync(localCookies)) {
+    extra.push('--cookies', localCookies);
+  } else if (process.env.YOUTUBE_COOKIES) {
+    const tempCookies = path.join(os.tmpdir(), 'yt_env_cookies.txt');
+    try {
+      fs.writeFileSync(tempCookies, process.env.YOUTUBE_COOKIES.trim());
+      extra.push('--cookies', tempCookies);
+    } catch {}
+  }
+
+  return extra;
+}
+
 app.get('/api/health', (req, res) => {
   const ytdlp = getWorkingYtdlpCmd();
   const ffmpeg = hasFfmpeg();
@@ -106,6 +125,7 @@ app.post('/api/info', async (req, res) => {
     '--dump-json',
     '--no-playlist',
     '--no-warnings',
+    ...getExtraYtdlpArgs(),
     cleanUrl
   ];
 
@@ -216,6 +236,7 @@ app.get('/api/download', (req, res) => {
     ...ytdlp.argsPrefix,
     '--no-playlist',
     '--no-warnings',
+    ...getExtraYtdlpArgs(),
     '-f', formatArg,
     '-o', outTemplate,
     cleanUrl
