@@ -41,7 +41,7 @@ function hasFfmpeg() {
 
 function getExtraYtdlpArgs() {
   const extra = [
-    '--extractor-args', 'youtube:player_client=android,android_embedded;player_skip=webpage,configs',
+    '--extractor-args', 'youtube:player_client=tv_embedded,ios,android,web',
     '--extractor-args', 'twitter:api=syndication',
     '--extractor-args', 'tiktok:app_version=20.2.1',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -50,7 +50,7 @@ function getExtraYtdlpArgs() {
     '--add-header', 'Sec-Fetch-Mode:navigate',
     '--geo-bypass',
     '--no-check-certificates',
-    '--socket-timeout', '25'
+    '--socket-timeout', '30'
   ];
 
   const localCookies = path.join(path.resolve(), 'cookies.txt');
@@ -181,9 +181,38 @@ app.post('/api/info', async (req, res) => {
     stderrData += chunk.toString();
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     if (code !== 0) {
       console.error('yt-dlp info error:', stderrData);
+
+      const ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+      if (ytMatch && ytMatch[1]) {
+        try {
+          const vidId = ytMatch[1];
+          const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vidId}&format=json`, { signal: AbortSignal.timeout(5000) });
+          if (oembedRes.ok) {
+            const oembed = await oembedRes.json();
+            return res.json({
+              id: vidId,
+              title: oembed.title || 'YouTube Video',
+              thumbnail: `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+              duration: null,
+              uploader: oembed.author_name || 'YouTube',
+              platform: 'youtube',
+              url: cleanUrl,
+              formats: [
+                { id: 'best', label: 'أعلى جودة متاحة (MP4)', ext: 'mp4', type: 'video', quality: 'Best Available' },
+                { id: '720', label: 'HD 720p (MP4)', ext: 'mp4', type: 'video', quality: '720p' },
+                { id: '480', label: 'SD 480p (MP4)', ext: 'mp4', type: 'video', quality: '480p' },
+                { id: 'mp3', label: 'صوت فقط (Audio)', ext: 'mp3', type: 'audio', quality: 'Audio Only' }
+              ]
+            });
+          }
+        } catch (oembedErr) {
+          console.error('oEmbed fallback error:', oembedErr);
+        }
+      }
+
       return res.status(500).json({
         error: stderrData.split('\n')[0] || 'Failed to fetch video information. Ensure the video is public and supported.',
         details: stderrData

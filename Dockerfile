@@ -10,7 +10,7 @@ RUN apt-get update && \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U yt-dlp
+RUN python3 -m pip install --no-cache-dir --break-system-packages -U --pre yt-dlp
 
 WORKDIR /app
 
