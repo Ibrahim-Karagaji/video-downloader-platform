@@ -109,6 +109,44 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+function formatArabicError(raw) {
+  if (!raw || typeof raw !== 'string') {
+    return 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.';
+  }
+
+  const lower = raw.toLowerCase();
+
+  if (lower.includes('truncated') || lower.includes('incomplete') || lower.includes('invalid url')) {
+    return 'رابط الفيديو غير مكتمل أو ناقص، يرجى التأكد من نسخ الرابط بالكامل.';
+  }
+  if (lower.includes('private video') || lower.includes('this video is private')) {
+    return 'هذا الفيديو خاص ولا يمكن تنزيله.';
+  }
+  if (lower.includes('unavailable') || lower.includes('does not exist') || lower.includes('not found') || lower.includes('404')) {
+    return 'الفيديو غير متاح أو تم حذفه من المنصة.';
+  }
+  if (lower.includes('sign in') || lower.includes('confirm you') || lower.includes('bot')) {
+    return 'تتطلب المنصة تسجيل الدخول لمشاهدة هذا الفيديو، يرجى تجربة فيديو عام.';
+  }
+  if (lower.includes('copyright') || lower.includes('blocked')) {
+    return 'هذا الفيديو محظور بسبب حقوق النشر أو القيود الجغرافية.';
+  }
+  if (lower.includes('age') || lower.includes('login') || lower.includes('account')) {
+    return 'هذا الفيديو مقيد بالفئات العمرية ويتطلب تسجيل الدخول.';
+  }
+  if (lower.includes('members-only') || lower.includes('premium')) {
+    return 'هذا الفيديو مخصص للمشتركين فقط.';
+  }
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return 'استغرق الاتصال بالخادم وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.';
+  }
+  if (lower.includes('unsupported') || lower.includes('no suitable') || lower.includes('no media')) {
+    return 'عذراً، لم يتم العثور على وسائط قابلة للتحميل في هذا الرابط.';
+  }
+
+  return 'تعذر معالجة هذا الرابط، يرجى التأكد من صحة الرابط وأن الفيديو متاح للعامة.';
+}
+
 function sanitizeFilename(name) {
   return (name || 'video')
     .replace(/[/\\?%*:|"<>]/g, '_')
@@ -148,7 +186,7 @@ function detectPlatform(url, extractor) {
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
-    return res.status(400).json({ error: 'Please provide a valid video URL starting with http:// or https://' });
+    return res.status(400).json({ error: 'يرجى إدخال رابط فيديو يبدأ بـ http:// أو https://' });
   }
 
   const cleanUrl = normalizeVideoUrl(url);
@@ -182,7 +220,7 @@ app.post('/api/info', async (req, res) => {
   const ytdlp = getWorkingYtdlpCmd();
   if (!ytdlp) {
     return res.status(500).json({
-      error: 'yt-dlp is not installed on the system. Please run: pip install yt-dlp',
+      error: 'محرك التحميل غير متوفر حالياً على الخادم',
       code: 'YTDLP_MISSING'
     });
   }
@@ -242,7 +280,7 @@ app.post('/api/info', async (req, res) => {
       }
 
       return res.status(500).json({
-        error: stderrData.split('\n')[0] || 'Failed to fetch video information. Ensure the video is public and supported.',
+        error: formatArabicError(stderrData),
         details: stderrData
       });
     }
@@ -287,12 +325,12 @@ app.post('/api/download/start', (req, res) => {
   const { url, quality = 'best', title = 'video' } = req.body;
 
   if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
-    return res.status(400).json({ error: 'Invalid URL' });
+    return res.status(400).json({ error: 'يرجى إدخال رابط فيديو صالح' });
   }
 
   const ytdlp = getWorkingYtdlpCmd();
   if (!ytdlp) {
-    return res.status(500).json({ error: 'yt-dlp is not installed' });
+    return res.status(500).json({ error: 'محرك التحميل غير متوفر على الخادم' });
   }
 
   const cleanUrl = normalizeVideoUrl(url);
@@ -378,7 +416,7 @@ app.post('/api/download/start', (req, res) => {
   child.on('close', (code) => {
     if (code !== 0) {
       job.status = 'error';
-      job.error = stderrData.split('\n')[0] || 'Download failed';
+      job.error = formatArabicError(stderrData);
       return;
     }
 
@@ -388,7 +426,7 @@ app.post('/api/download/start', (req, res) => {
 
       if (!targetFile) {
         job.status = 'error';
-        job.error = 'Downloaded file not found';
+        job.error = 'تعذر العثور على الملف الذي تم تنزيله، يرجى المحاولة مرة أخرى.';
         return;
       }
 
@@ -400,7 +438,7 @@ app.post('/api/download/start', (req, res) => {
       job.status = 'ready';
     } catch (e) {
       job.status = 'error';
-      job.error = 'Error assembling file';
+      job.error = 'حدث خطأ أثناء معالجة وحفظ الملف.';
     }
   });
 

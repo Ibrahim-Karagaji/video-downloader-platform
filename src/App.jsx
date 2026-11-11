@@ -2,6 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { DownloadCloud, Clipboard, X, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
 import VideoCard from './components/VideoCard';
 
+function toArabicError(raw) {
+  if (!raw || typeof raw !== 'string') return 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.';
+  const lower = raw.toLowerCase();
+  if (lower.includes('truncated') || lower.includes('incomplete') || lower.includes('invalid url')) {
+    return 'رابط الفيديو غير مكتمل أو ناقص، يرجى التأكد من نسخ الرابط بالكامل.';
+  }
+  if (lower.includes('private')) {
+    return 'هذا الفيديو خاص ولا يمكن تنزيله.';
+  }
+  if (lower.includes('unavailable') || lower.includes('not found') || lower.includes('404')) {
+    return 'الفيديو غير متاح أو تم حذفه من المنصة.';
+  }
+  if (lower.includes('sign in') || lower.includes('bot')) {
+    return 'تتطلب المنصة تسجيل الدخول لمشاهدة هذا الفيديو، يرجى تجربة فيديو عام.';
+  }
+  if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('connect')) {
+    return 'تعذر الاتصال بالخادم، يرجى التحقق من اتصال الإنترنت.';
+  }
+  if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('abort')) {
+    return 'استغرق فحص الرابط وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.';
+  }
+  return raw;
+}
+
 export default function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -88,11 +112,7 @@ export default function App() {
         throw new Error(errData.error || 'تعذر جلب تفاصيل هذا الفيديو.');
       }
     } catch (err) {
-      if (err.name === 'AbortError' || err.message?.includes('timed out') || err.message?.includes('timeout')) {
-        setError('استغرق فحص الرابط وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.');
-      } else {
-        setError(err.message || 'تعذر الاتصال بالخادم.');
-      }
+      setError(toArabicError(err.message || 'تعذر الاتصال بالخادم.'));
       setLoading(false);
     }
   };
