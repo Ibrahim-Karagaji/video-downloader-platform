@@ -281,6 +281,169 @@ app.post('/api/info', async (req, res) => {
   });
 });
 
+const activeJobs = new Map();
+
+app.post('/api/download/start', (req, res) => {
+  const { url, quality = 'best', title = 'video' } = req.body;
+
+  if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  const ytdlp = getWorkingYtdlpCmd();
+  if (!ytdlp) {
+    return res.status(500).json({ error: 'yt-dlp is not installed' });
+  }
+
+  const cleanUrl = normalizeVideoUrl(url);
+  const safeTitle = sanitizeFilename(title);
+  const ffmpegInstalled = hasFfmpeg();
+
+  const tempDir = os.tmpdir();
+  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const outTemplate = path.join(tempDir, `vdl_${jobId}.%(ext)s`);
+
+  let formatArg;
+  if (ffmpegInstalled) {
+    if (quality === '1080') {
+      formatArg = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best';
+    } else if (quality === '720') {
+      formatArg = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best';
+    } else if (quality === '480') {
+      formatArg = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best';
+    } else if (quality === 'mp3') {
+      formatArg = 'bestaudio/best';
+    } else {
+      formatArg = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best';
+    }
+  } else {
+    if (quality === '1080' || quality === '720') {
+      formatArg = 'best[height<=1080][vcodec!=none][acodec!=none]/best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best';
+    } else if (quality === '480') {
+      formatArg = 'best[height<=480][vcodec!=none][acodec!=none]/best[height<=480]/best';
+    } else if (quality === '360') {
+      formatArg = 'best[height<=360][vcodec!=none][acodec!=none]/best[height<=360]/best';
+    } else if (quality === 'mp3' || quality === 'm4a') {
+      formatArg = 'bestaudio[ext=m4a]/bestaudio/best';
+    } else {
+      formatArg = 'best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best';
+    }
+  }
+
+  const args = [
+    ...ytdlp.argsPrefix,
+    '--no-playlist',
+    '--newline',
+    '--progress',
+    ...getExtraYtdlpArgs(),
+    '-f', formatArg,
+    '-o', outTemplate,
+    cleanUrl
+  ];
+
+  const job = {
+    id: jobId,
+    status: 'downloading',
+    percent: 0,
+    speed: '',
+    eta: '',
+    error: null,
+    filePath: null,
+    filename: null
+  };
+  activeJobs.set(jobId, job);
+
+  const child = spawn(ytdlp.cmd, args);
+  let stderrData = '';
+
+  const parseProgress = (chunk) => {
+    const text = chunk.toString();
+    const lines = text.split(/[\r\n]+/);
+    for (const line of lines) {
+      const match = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%(?:\s+of\s+([^\s]+))?(?:\s+at\s+([^\s]+))?(?:\s+ETA\s+([^\s]+))?/);
+      if (match) {
+        job.percent = Math.min(Math.round(parseFloat(match[1])), 99);
+        if (match[3]) job.speed = match[3];
+        if (match[4]) job.eta = match[4];
+      }
+    }
+  };
+
+  child.stdout.on('data', parseProgress);
+  child.stderr.on('data', (d) => {
+    stderrData += d.toString();
+    parseProgress(d);
+  });
+
+  child.on('close', (code) => {
+    if (code !== 0) {
+      job.status = 'error';
+      job.error = stderrData.split('\n')[0] || 'Download failed';
+      return;
+    }
+
+    try {
+      const allFiles = fs.readdirSync(tempDir);
+      const targetFile = allFiles.find(f => f.startsWith(`vdl_${jobId}.`));
+
+      if (!targetFile) {
+        job.status = 'error';
+        job.error = 'Downloaded file not found';
+        return;
+      }
+
+      const fullPath = path.join(tempDir, targetFile);
+      const ext = path.extname(fullPath).replace('.', '') || 'mp4';
+      job.filePath = fullPath;
+      job.filename = `${safeTitle}.${ext}`;
+      job.percent = 100;
+      job.status = 'ready';
+    } catch (e) {
+      job.status = 'error';
+      job.error = 'Error assembling file';
+    }
+  });
+
+  setTimeout(() => {
+    if (job.filePath) {
+      try { fs.unlinkSync(job.filePath); } catch {}
+    }
+    activeJobs.delete(jobId);
+  }, 10 * 60 * 1000);
+
+  res.json({ jobId });
+});
+
+app.get('/api/download/progress/:jobId', (req, res) => {
+  const job = activeJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  res.json({
+    status: job.status,
+    percent: job.percent,
+    speed: job.speed,
+    eta: job.eta,
+    error: job.error
+  });
+});
+
+app.get('/api/download/file/:jobId', (req, res) => {
+  const job = activeJobs.get(req.params.jobId);
+  if (!job || job.status !== 'ready' || !job.filePath) {
+    return res.status(404).send('File not found or not ready');
+  }
+
+  res.download(job.filePath, job.filename, (err) => {
+    try {
+      if (fs.existsSync(job.filePath)) {
+        fs.unlinkSync(job.filePath);
+      }
+    } catch {}
+    activeJobs.delete(req.params.jobId);
+  });
+});
+
 app.get('/api/download', (req, res) => {
   const { url, quality = 'best', title = 'video' } = req.query;
 

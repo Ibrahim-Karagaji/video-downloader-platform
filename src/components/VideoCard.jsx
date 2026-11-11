@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Film, Music, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Download, Film, Music, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { downloadVideo } from '../services/downloader';
 
 const formatOptions = [
@@ -13,11 +13,17 @@ const formatOptions = [
 export default function VideoCard({ video, isDark = true }) {
   const [selectedFormat, setSelectedFormat] = useState('best');
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadSpeed, setDownloadSpeed] = useState('');
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
 
   const handleDownload = async () => {
     setDownloading(true);
     setDownloadError(null);
+    setDownloadSuccess(false);
+    setDownloadProgress(0);
+    setDownloadSpeed('');
 
     const isAudio = selectedFormat === 'mp3';
 
@@ -26,14 +32,24 @@ export default function VideoCard({ video, isDark = true }) {
         url: video.url,
         quality: selectedFormat,
         title: video.title || 'video',
-        isAudio
+        isAudio,
+        onProgress: (data) => {
+          if (typeof data.percent === 'number') {
+            setDownloadProgress(data.percent);
+          }
+          if (data.speed) {
+            setDownloadSpeed(data.speed);
+          }
+        }
       });
+      setDownloadProgress(100);
+      setDownloadSuccess(true);
     } catch (err) {
       setDownloadError(err.message || 'حدث خطأ أثناء محاولة التنزيل.');
     } finally {
       setTimeout(() => {
         setDownloading(false);
-      }, 3500);
+      }, 2500);
     }
   };
 
@@ -93,6 +109,7 @@ export default function VideoCard({ video, isDark = true }) {
                 key={fmt.id}
                 type="button"
                 onClick={() => setSelectedFormat(fmt.id)}
+                disabled={downloading}
                 className={`flex items-center justify-between py-1.5 px-2.5 rounded-xl border text-[11px] sm:text-xs transition-all ${
                   isSelected
                     ? 'bg-indigo-600 border-indigo-600 text-white font-bold shadow-sm'
@@ -124,10 +141,41 @@ export default function VideoCard({ video, isDark = true }) {
         </div>
       </div>
 
+      {downloading && (
+        <div className={`mt-3 p-2.5 rounded-xl border transition-all ${
+          isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-100 border-slate-200'
+        }`}>
+          <div className="flex justify-between items-center text-[11px] mb-1.5 font-bold">
+            <span className="flex items-center gap-1.5 text-indigo-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {downloadProgress >= 100 ? 'اكتمل التجهيز! جاري إرسال الملف...' : 'جاري تنزيل ومعالجة الفيديو...'}
+            </span>
+            <span className="font-mono text-emerald-500">
+              {downloadProgress}% {downloadSpeed ? `(${downloadSpeed})` : ''}
+            </span>
+          </div>
+          <div className={`w-full h-2 rounded-full overflow-hidden ${
+            isDark ? 'bg-slate-800' : 'bg-slate-200'
+          }`}>
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-all duration-300 rounded-full"
+              style={{ width: `${downloadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {downloadError && (
         <div className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] sm:text-xs flex items-center gap-1.5">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>{downloadError}</span>
+        </div>
+      )}
+
+      {downloadSuccess && !downloading && (
+        <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] flex items-center justify-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>بدأ تحميل الملف في المتصفح بنجاح!</span>
         </div>
       )}
 
@@ -136,14 +184,14 @@ export default function VideoCard({ video, isDark = true }) {
         disabled={downloading}
         className={`w-full mt-3 flex items-center justify-center gap-2 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-[0.99] ${
           downloading
-            ? 'bg-emerald-600 text-white cursor-wait'
+            ? 'bg-slate-700 text-slate-300 cursor-wait'
             : 'bg-indigo-600 hover:bg-indigo-700 text-white'
         }`}
       >
         {downloading ? (
           <>
-            <CheckCircle2 className="w-3.5 h-3.5 animate-spin" />
-            <span>جاري التحميل...</span>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>جاري التجهيز ({downloadProgress}%)...</span>
           </>
         ) : (
           <>
