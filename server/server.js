@@ -41,21 +41,60 @@ function hasFfmpeg() {
 
 function getExtraYtdlpArgs() {
   const extra = [
-    '--extractor-args', 'youtube:player_client=ios,android,mweb'
+    '--extractor-args', 'youtube:player_client=android,android_embedded;player_skip=webpage,configs',
+    '--extractor-args', 'twitter:api=syndication',
+    '--extractor-args', 'tiktok:app_version=20.2.1',
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    '--add-header', 'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    '--add-header', 'Accept-Language:en-US,en;q=0.9,ar;q=0.8',
+    '--add-header', 'Sec-Fetch-Mode:navigate',
+    '--geo-bypass',
+    '--no-check-certificates',
+    '--socket-timeout', '25'
   ];
 
   const localCookies = path.join(path.resolve(), 'cookies.txt');
   if (fs.existsSync(localCookies)) {
     extra.push('--cookies', localCookies);
-  } else if (process.env.YOUTUBE_COOKIES) {
+  } else if (process.env.YOUTUBE_COOKIES || process.env.COOKIES) {
+    const rawCookies = process.env.YOUTUBE_COOKIES || process.env.COOKIES;
     const tempCookies = path.join(os.tmpdir(), 'yt_env_cookies.txt');
     try {
-      fs.writeFileSync(tempCookies, process.env.YOUTUBE_COOKIES.trim());
+      fs.writeFileSync(tempCookies, rawCookies.trim());
       extra.push('--cookies', tempCookies);
     } catch {}
   }
 
   return extra;
+}
+
+function normalizeVideoUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const clean = rawUrl.trim();
+
+  try {
+    const parsed = new URL(clean);
+    
+    if (parsed.hostname === 'youtu.be') {
+      const vidId = parsed.pathname.replace(/^\//, '').split('/')[0];
+      if (vidId) return `https://www.youtube.com/watch?v=${vidId}`;
+    }
+
+    if (parsed.hostname.includes('youtube.com')) {
+      if (parsed.pathname.startsWith('/shorts/')) {
+        const vidId = parsed.pathname.split('/shorts/')[1]?.split('/')[0]?.split('?')[0];
+        if (vidId) return `https://www.youtube.com/watch?v=${vidId}`;
+      }
+      const vidId = parsed.searchParams.get('v');
+      if (vidId) return `https://www.youtube.com/watch?v=${vidId}`;
+    }
+
+    const trackingParams = ['si', 'utm_source', 'utm_medium', 'utm_campaign', 's', 't', 'fbclid', 'igsh'];
+    trackingParams.forEach(p => parsed.searchParams.delete(p));
+    return parsed.toString();
+  } catch {
+    return clean;
+  }
 }
 
 app.get('/api/health', (req, res) => {
@@ -119,7 +158,7 @@ app.post('/api/info', async (req, res) => {
     });
   }
 
-  const cleanUrl = url.trim();
+  const cleanUrl = normalizeVideoUrl(url);
   const args = [
     ...ytdlp.argsPrefix,
     '--dump-json',
@@ -231,7 +270,7 @@ app.get('/api/download', (req, res) => {
     }
   }
 
-  const cleanUrl = url.trim();
+  const cleanUrl = normalizeVideoUrl(url);
   const args = [
     ...ytdlp.argsPrefix,
     '--no-playlist',
