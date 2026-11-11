@@ -187,7 +187,6 @@ app.post('/api/info', async (req, res) => {
     });
   }
 
-  const cleanUrl = normalizeVideoUrl(url);
   const args = [
     ...ytdlp.argsPrefix,
     '--dump-json',
